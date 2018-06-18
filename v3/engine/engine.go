@@ -21,7 +21,9 @@ type Transaction interface {
 	Bucket(path ...string) (Bucket, error)
 }
 
-type Pipe func(Bucket) (Bucket, error)
+type Pipe interface {
+	Pipe(Bucket) (Bucket, error)
+}
 
 type Pipeline []Pipe
 
@@ -29,7 +31,7 @@ func (pl Pipeline) Run(b Bucket) (Bucket, error) {
 	var err error
 
 	for _, p := range pl {
-		b, err = p(b)
+		b, err = p.Pipe(b)
 		if err != nil {
 			return nil, err
 		}

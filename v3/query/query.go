@@ -7,16 +7,49 @@ import (
 )
 
 type Query struct {
-	selector *Selector
+	pl engine.Pipeline
 }
 
 func (q *Query) Select() *Selector {
-	q.selector = new(Selector)
-	return q.selector
+	var selector Selector
+
+	q.pl = append(q.pl, &selector)
+
+	return &selector
+}
+
+func (q *Query) Match(matchers ...Matcher) {
+	var mp matcherPipe
+
+	// TODO change that by wrapping all the matchers with an AND
+	mp.matcher = matchers[0]
+	q.pl = append(q.pl, &mp)
+}
+
+func (q *Query) Pipe(b engine.Bucket) (engine.Bucket, error) {
+	return q.pl.Run(b)
 }
 
 type Selector struct {
 	selectors []func(engine.Bucket, *engine.RecordBuffer, *engine.Schema) error
+}
+
+func (s *Selector) Pipe(b engine.Bucket) (engine.Bucket, error) {
+	var buff engine.RecordBuffer
+
+	schema, err := b.Schema()
+	if err != nil {
+		return nil, err
+	}
+
+	for _, slc := range s.selectors {
+		err = slc(b, &buff, schema)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return &buff, nil
 }
 
 func (s *Selector) Field(name string) *Selector {
@@ -125,4 +158,45 @@ func (s *Selector) MaxInt64(field string) *Selector {
 func (s *Selector) Select(selectorFn func(engine.Bucket, *engine.RecordBuffer, *engine.Schema) error) *Selector {
 	s.selectors = append(s.selectors, selectorFn)
 	return s
+}
+
+type Matcher interface {
+	Match(engine.Record) (bool, error)
+}
+
+type matcherPipe struct {
+	matcher Matcher
+}
+
+func (m *matcherPipe) Pipe(b engine.Bucket) (engine.Bucket, error) {
+	c, err := b.Cursor()
+	if err != nil {
+		return nil, err
+	}
+
+	var buff engine.RecordBuffer
+
+	for {
+		r, err := c.Next()
+		if err != nil {
+			return nil, err
+		}
+
+		if r == nil {
+			break
+		}
+
+		ok, err := m.matcher.Match(r)
+		if err != nil {
+			return nil, err
+		}
+
+		if !ok {
+			continue
+		}
+
+		buff.Add(r)
+	}
+
+	return &buff, nil
 }
