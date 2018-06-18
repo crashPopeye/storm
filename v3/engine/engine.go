@@ -1,12 +1,17 @@
 package engine
 
 type Bucket interface {
-	Next() (Record, error)
+	Cursor() (Cursor, error)
 	Schema() (*Schema, error)
+}
+
+type Cursor interface {
+	Next() (Record, error)
 }
 
 type Engine interface {
 	Begin(writable bool) (Transaction, error)
+	Close() error
 }
 
 type Transaction interface {

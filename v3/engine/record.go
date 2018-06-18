@@ -4,6 +4,9 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"reflect"
+
+	"github.com/asdine/storm"
 )
 
 type FieldType int
@@ -52,10 +55,37 @@ func DecodeInt64(v []byte) (int64, error) {
 	return i, nil
 }
 
+type FieldInfo struct {
+	Name string
+	Type FieldType
+}
+
+type Schema struct {
+	fields map[string]*FieldInfo
+}
+
+func (c *Schema) Get(name string) *FieldInfo {
+	f, _ := c.fields[name]
+	return f
+}
+
+func (c *Schema) Set(name string, t FieldType) {
+	if c.fields == nil {
+		c.fields = make(map[string]*FieldInfo)
+	}
+
+	c.fields[name] = &FieldInfo{Name: name, Type: t}
+}
+
+type Record interface {
+	Next() (*Field, error)
+	Bytes(field string) ([]byte, error)
+}
+
 type FieldBuffer struct {
 	fields []*Field
 	i      int
-	Schema *Schema
+	schema *Schema
 }
 
 func (b *FieldBuffer) Bytes(field string) ([]byte, error) {
@@ -82,81 +112,83 @@ func (b *FieldBuffer) Next() (*Field, error) {
 func (b *FieldBuffer) Reset() {
 	b.i = 0
 	b.fields = b.fields[:0]
+	b.schema = nil
 }
 
-func (b *FieldBuffer) addField(name string, typ FieldType, val interface{}) error {
-	if b.Schema == nil {
-		b.Schema = new(Schema)
+func (b *FieldBuffer) setField(name string, typ FieldType, val interface{}, data []byte) error {
+	if b.schema == nil {
+		b.schema = new(Schema)
 	}
 
-	f := b.Schema.Get(name)
-	if f == nil {
-		b.Schema.Set(name, typ)
-		f = b.Schema.Get(name)
+	f := b.schema.Get(name)
+	if f != nil {
+		return errors.New("field already exists")
 	}
 
-	if f.Type != typ {
-		return errors.New("mismatched type")
+	b.schema.Set(name, typ)
+	f = b.schema.Get(name)
+
+	fd := Field{
+		Name:  f.Name,
+		Type:  f.Type,
+		Value: val,
+		Data:  data,
 	}
 
-	fd, err := b.Schema.CreateField(name)
-	if err != nil {
-		return err
-	}
-
-	fd.Value = val
-	b.fields = append(b.fields, fd)
+	b.fields = append(b.fields, &fd)
 	return nil
 }
 
-func (b *FieldBuffer) AddInt64(name string, i int64) error {
-	return b.addField(name, Int64Field, i)
+func (b *FieldBuffer) SetInt64(name string, i int64) error {
+	return b.setField(name, Int64Field, i, nil)
 }
 
-func (b *FieldBuffer) AddString(name string, s string) error {
-	return b.addField(name, StringField, s)
+func (b *FieldBuffer) SetString(name string, s string) error {
+	return b.setField(name, StringField, s, nil)
 }
 
-func (b *FieldBuffer) Add(f *Field) {
-	b.fields = append(b.fields, f)
+func (b *FieldBuffer) Set(name string, typ FieldType, val interface{}) error {
+	return b.setField(name, typ, val, nil)
+}
+
+func (b *FieldBuffer) SetData(name string, typ FieldType, data []byte) error {
+	return b.setField(name, typ, nil, data)
 }
 
 func (b *FieldBuffer) Len() int {
 	return len(b.fields)
 }
 
-type Schema struct {
-	fields map[string]*Field
-}
-
-func (c *Schema) Get(name string) *Field {
-	f, _ := c.fields[name]
-	return f
-}
-
-func (c *Schema) Set(name string, t FieldType) {
-	if c.fields == nil {
-		c.fields = make(map[string]*Field)
+func NewFieldBufferStruct(v interface{}) (*FieldBuffer, error) {
+	ref := reflect.ValueOf(v)
+	if !ref.IsValid() || ref.Kind() != reflect.Ptr || ref.Elem().Kind() != reflect.Struct {
+		return nil, storm.ErrStructPtrNeeded
 	}
 
-	c.fields[name] = &Field{Name: name, Type: t}
-}
+	typ := ref.Type()
+	var fb FieldBuffer
 
-func (c *Schema) CreateField(name string) (*Field, error) {
-	v, ok := c.fields[name]
-	if !ok {
-		return nil, fmt.Errorf("unknown field '%s'", name)
+	for i := 0; i < ref.NumField(); i++ {
+		r := ref.Field(i)
+		t := typ.Field(i)
+
+		var ftyp FieldType
+		switch r.Kind() {
+		case reflect.Int64:
+			ftyp = Int64Field
+		case reflect.String:
+			ftyp = StringField
+		default:
+			return nil, fmt.Errorf("unsupported type '%s'", r.Kind())
+		}
+
+		err := fb.Set(t.Name, ftyp, r.Interface())
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	return &Field{
-		Name: name,
-		Type: v.Type,
-	}, nil
-}
-
-type Record interface {
-	Next() (*Field, error)
-	Bytes(field string) ([]byte, error)
+	return &fb, nil
 }
 
 type RecordScanner struct {
@@ -190,14 +222,8 @@ func (b *RecordBuffer) Add(rec Record) {
 	b.records = append(b.records, rec)
 }
 
-func (b *RecordBuffer) Next() (Record, error) {
-	if b.i < len(b.records) {
-		r := b.records[b.i]
-		b.i++
-		return r, nil
-	}
-
-	return nil, nil
+func (b *RecordBuffer) Cursor() (Cursor, error) {
+	return &cursor{records: b.records}, nil
 }
 
 func (b *RecordBuffer) Schema() (*Schema, error) {
@@ -213,8 +239,27 @@ func (b *RecordBuffer) Schema() (*Schema, error) {
 			return nil, err
 		}
 
+		if f == nil {
+			break
+		}
+
 		s.Set(f.Name, f.Type)
 	}
 
 	return &s, nil
+}
+
+type cursor struct {
+	i       int
+	records []Record
+}
+
+func (c *cursor) Next() (Record, error) {
+	if c.i < len(c.records) {
+		r := c.records[c.i]
+		c.i++
+		return r, nil
+	}
+
+	return nil, nil
 }

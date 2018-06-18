@@ -9,10 +9,11 @@ import (
 )
 
 func TestBucket(t *testing.T) {
-	db, cleanup := tempDB(t)
+	path, cleanup := tempDB(t)
 	defer cleanup()
 
-	e := NewEngine(db)
+	e, err := NewEngine(path)
+	require.NoError(t, err)
 	tx, err := e.Begin(true)
 	require.NoError(t, err)
 	defer tx.Rollback()
@@ -21,9 +22,11 @@ func TestBucket(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		buff.Reset()
 
-		buff.AddString("Name", fmt.Sprintf("Name %d", i))
+		err = buff.SetString("Name", fmt.Sprintf("Name %d", i))
+		require.NoError(t, err)
 
-		buff.AddInt64("Age", int64(i))
+		err = buff.SetInt64("Age", int64(i))
+		require.NoError(t, err)
 
 		_, err = tx.Insert(&buff, "a")
 		require.NoError(t, err)
@@ -31,9 +34,11 @@ func TestBucket(t *testing.T) {
 
 	b, err := tx.Bucket("a")
 	require.NoError(t, err)
+	c, err := b.Cursor()
+	require.NoError(t, err)
 
 	for i := 0; i < 10; i++ {
-		r, err := b.Next()
+		r, err := c.Next()
 		require.NoError(t, err)
 		require.NotNil(t, r)
 
@@ -49,7 +54,7 @@ func TestBucket(t *testing.T) {
 		require.Equal(t, int64(i), age)
 	}
 
-	r, err := b.Next()
+	r, err := c.Next()
 	require.NoError(t, err)
 	require.Nil(t, r)
 }

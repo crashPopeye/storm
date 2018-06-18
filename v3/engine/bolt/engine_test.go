@@ -7,45 +7,37 @@ import (
 	"testing"
 
 	"github.com/asdine/storm/v3/engine"
-	bolt "github.com/coreos/bbolt"
 	"github.com/stretchr/testify/require"
 )
 
-func tempDB(t *testing.T) (*bolt.DB, func()) {
+func tempDB(t *testing.T) (string, func()) {
 	t.Helper()
 
 	dir, err := ioutil.TempDir("", "stormv3")
 	require.NoError(t, err)
-	db, err := bolt.Open(path.Join(dir, "test.db"), 0660, nil)
-	require.NoError(t, err)
-	return db, func() {
-		db.Close()
+	return path.Join(dir, "test.db"), func() {
 		os.RemoveAll(dir)
 	}
 }
 
 func TestEngine(t *testing.T) {
-	db, cleanup := tempDB(t)
+	path, cleanup := tempDB(t)
 	defer cleanup()
 
-	e := NewEngine(db)
+	e, err := NewEngine(path)
+	require.NoError(t, err)
+
 	tx, err := e.Begin(true)
 	require.NoError(t, err)
 	defer tx.Rollback()
 
 	var buff engine.FieldBuffer
 
-	buff.Add(&engine.Field{
-		Name:  "Name",
-		Type:  engine.StringField,
-		Value: "Hello",
-	})
+	err = buff.SetString("Name", "Hello")
+	require.NoError(t, err)
 
-	buff.Add(&engine.Field{
-		Name:  "Age",
-		Type:  engine.Int64Field,
-		Value: int64(10),
-	})
+	err = buff.SetInt64("Age", 10)
+	require.NoError(t, err)
 
 	_, err = tx.Insert(&buff, "a", "b")
 	require.NoError(t, err)

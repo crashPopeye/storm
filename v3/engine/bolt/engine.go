@@ -9,10 +9,16 @@ type Engine struct {
 	db *bolt.DB
 }
 
-func NewEngine(db *bolt.DB) *Engine {
+// TODO options and stuff
+func NewEngine(path string) (*Engine, error) {
+	db, err := bolt.Open(path, 0660, nil)
+	if err != nil {
+		return nil, err
+	}
+
 	return &Engine{
 		db: db,
-	}
+	}, nil
 }
 
 func (e *Engine) Begin(writable bool) (engine.Transaction, error) {
@@ -22,6 +28,10 @@ func (e *Engine) Begin(writable bool) (engine.Transaction, error) {
 	}
 
 	return &transaction{tx}, nil
+}
+
+func (e *Engine) Close() error {
+	return e.db.Close()
 }
 
 type transaction struct {

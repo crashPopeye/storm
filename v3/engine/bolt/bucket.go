@@ -9,11 +9,7 @@ import (
 )
 
 type bucket struct {
-	buff engine.FieldBuffer
-	b    *bolt.Bucket
-	cur  *bolt.Cursor
-	k, v []byte
-
+	b      *bolt.Bucket
 	schema *engine.Schema
 }
 
@@ -30,38 +26,55 @@ func newBucket(bb *bolt.Bucket) (*bucket, error) {
 
 	b := bucket{
 		b:      bb,
-		cur:    bb.Cursor(),
 		schema: schema,
 	}
 
-	b.buff.Schema = schema
-	b.k, b.v = b.cur.First()
 	return &b, nil
 }
 
-func (b *bucket) Next() (engine.Record, error) {
-	if b.k == nil {
+func (b *bucket) Cursor() (engine.Cursor, error) {
+	var c cursor
+	c.cur = b.b.Cursor()
+	c.k, c.v = c.cur.First()
+	c.schema = b.schema
+
+	return &c, nil
+}
+
+func (b *bucket) Schema() (*engine.Schema, error) {
+	return b.schema, nil
+}
+
+type cursor struct {
+	buff   engine.FieldBuffer
+	cur    *bolt.Cursor
+	k, v   []byte
+	schema *engine.Schema
+}
+
+func (c *cursor) Next() (engine.Record, error) {
+	if c.k == nil {
 		return nil, nil
 	}
 
 	var id, fld, curid []byte
 
-	b.buff.Reset()
+	c.buff.Reset()
 
-	for b.k != nil {
+	for c.k != nil {
 		// skip buckets
-		for b.k != nil && b.v == nil {
-			b.k, b.v = b.cur.Next()
+		for c.k != nil && c.v == nil {
+			c.k, c.v = c.cur.Next()
 		}
 
-		if b.k == nil {
+		if c.k == nil {
 			break
 		}
 
-		if idx := bytes.IndexByte(b.k, '-'); idx != -1 {
-			id, fld = b.k[:idx], b.k[idx+1:]
+		if idx := bytes.IndexByte(c.k, '-'); idx != -1 {
+			id, fld = c.k[:idx], c.k[idx+1:]
 		} else {
-			return nil, fmt.Errorf("malformed rowid '%s'", b.k)
+			return nil, fmt.Errorf("malformed rowid '%s'", c.k)
 		}
 
 		if curid != nil && !bytes.Equal(id, curid) {
@@ -70,19 +83,18 @@ func (b *bucket) Next() (engine.Record, error) {
 
 		curid = id
 
-		f := b.schema.Get(string(fld))
-		b.buff.Add(&engine.Field{Name: f.Name, Type: f.Type, Data: b.v})
+		f := c.schema.Get(string(fld))
+		err := c.buff.SetData(f.Name, f.Type, c.v)
+		if err != nil {
+			return nil, err
+		}
 
-		b.k, b.v = b.cur.Next()
+		c.k, c.v = c.cur.Next()
 	}
 
-	if b.buff.Len() == 0 {
+	if c.buff.Len() == 0 {
 		return nil, nil
 	}
 
-	return &b.buff, nil
-}
-
-func (b *bucket) Schema() (*engine.Schema, error) {
-	return b.schema, nil
+	return &c.buff, nil
 }
