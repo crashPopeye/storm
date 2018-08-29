@@ -1,7 +1,7 @@
 package storm
 
 import (
-	"github.com/asdine/storm/codec"
+	"github.com/crashPopeye/storm/codec"
 	bolt "go.etcd.io/bbolt"
 )
 

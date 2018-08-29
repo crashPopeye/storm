@@ -1,8 +1,8 @@
-# Storm
+﻿# Storm
 
-[![Build Status](https://travis-ci.org/asdine/storm.svg)](https://travis-ci.org/asdine/storm)
-[![GoDoc](https://godoc.org/github.com/asdine/storm?status.svg)](https://godoc.org/github.com/asdine/storm)
-[![Go Report Card](https://goreportcard.com/badge/github.com/asdine/storm)](https://goreportcard.com/report/github.com/asdine/storm)
+[![Build Status](https://travis-ci.org/crashPopeye/storm.svg)](https://travis-ci.org/asdine/storm)
+[![GoDoc](https://godoc.org/github.com/crashPopeye/storm?status.svg)](https://godoc.org/github.com/asdine/storm)
+[![Go Report Card](https://goreportcard.com/badge/github.com/crashPopeye/storm)](https://goreportcard.com/report/github.com/asdine/storm)
 
 Storm is a simple and powerful toolkit for [BoltDB](https://github.com/coreos/bbolt). Basically, Storm provides indexes, a wide range of methods to store and fetch data, an advanced query system, and much more.
 
@@ -288,7 +288,7 @@ Useful when the structure has changed
 ### Advanced queries
 
 For more complex queries, you can use the `Select` method.
-`Select` takes any number of [`Matcher`](https://godoc.org/github.com/asdine/storm/q#Matcher) from the [`q`](https://godoc.org/github.com/asdine/storm/q) package.
+`Select` takes any number of [`Matcher`](https://godoc.org/github.com/asdine/storm/q#Matcher) from the [`q`](https://godoc.org/github.com/crashPopeye/storm/q) package.
 
 Here are some common Matchers:
 
@@ -343,7 +343,7 @@ q.Or(
 
 You can find the complete list in the [documentation](https://godoc.org/github.com/asdine/storm/q#Matcher).
 
-`Select` takes any number of matchers and wraps them into a `q.And()` so it's not necessary to specify it. It returns a [`Query`](https://godoc.org/github.com/asdine/storm#Query) type.
+`Select` takes any number of matchers and wraps them into a `q.And()` so it's not necessary to specify it. It returns a [`Query`](https://godoc.org/github.com/crashPopeye/storm#Query) type.
 
 ```go
 query := db.Select(q.Gte("Age", 7), q.Lte("Age", 77))
@@ -455,7 +455,7 @@ db, err := storm.Open("my.db", storm.BoltOptions(0600, &bolt.Options{Timeout: 1 
 
 #### MarshalUnmarshaler
 
-To store the data in BoltDB, Storm marshals it in JSON by default. If you wish to change this behavior you can pass a codec that implements [`codec.MarshalUnmarshaler`](https://godoc.org/github.com/asdine/storm/codec#MarshalUnmarshaler) via the [`storm.Codec`](https://godoc.org/github.com/asdine/storm#Codec) option:
+To store the data in BoltDB, Storm marshals it in JSON by default. If you wish to change this behavior you can pass a codec that implements [`codec.MarshalUnmarshaler`](https://godoc.org/github.com/crashPopeye/storm/codec#MarshalUnmarshaler) via the [`storm.Codec`](https://godoc.org/github.com/crashPopeye/storm#Codec) option:
 
 ```go
 db := storm.Open("my.db", storm.Codec(myCodec))
@@ -463,18 +463,18 @@ db := storm.Open("my.db", storm.Codec(myCodec))
 
 ##### Provided Codecs
 
-You can easily implement your own `MarshalUnmarshaler`, but Storm comes with built-in support for [JSON](https://godoc.org/github.com/asdine/storm/codec/json) (default), [GOB](https://godoc.org/github.com/asdine/storm/codec/gob),  [Sereal](https://godoc.org/github.com/asdine/storm/codec/sereal), [Protocol Buffers](https://godoc.org/github.com/asdine/storm/codec/protobuf) and [MessagePack](https://godoc.org/github.com/asdine/storm/codec/msgpack).
+You can easily implement your own `MarshalUnmarshaler`, but Storm comes with built-in support for [JSON](https://godoc.org/github.com/asdine/storm/codec/json) (default), [GOB](https://godoc.org/github.com/crashPopeye/storm/codec/gob),  [Sereal](https://godoc.org/github.com/crashPopeye/storm/codec/sereal), [Protocol Buffers](https://godoc.org/github.com/crashPopeye/storm/codec/protobuf) and [MessagePack](https://godoc.org/github.com/crashPopeye/storm/codec/msgpack).
 
 These can be used by importing the relevant package and use that codec to configure Storm. The example below shows all variants (without proper error handling):
 
 ```go
 import (
-  "github.com/asdine/storm"
-  "github.com/asdine/storm/codec/gob"
-  "github.com/asdine/storm/codec/json"
-  "github.com/asdine/storm/codec/sereal"
-  "github.com/asdine/storm/codec/protobuf"
-  "github.com/asdine/storm/codec/msgpack"
+  "github.com/crashPopeye/storm"
+  "github.com/crashPopeye/storm/codec/gob"
+  "github.com/crashPopeye/storm/codec/json"
+  "github.com/crashPopeye/storm/codec/sereal"
+  "github.com/crashPopeye/storm/codec/protobuf"
+  "github.com/crashPopeye/storm/codec/msgpack"
 )
 
 var gobDb, _ = storm.Open("gob.db", storm.Codec(gob.Codec))

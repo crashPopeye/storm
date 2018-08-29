@@ -3,8 +3,8 @@ package storm
 import (
 	"testing"
 
-	"github.com/asdine/storm/codec/gob"
-	"github.com/asdine/storm/codec/json"
+	"github.com/crashPopeye/storm/codec/gob"
+	"github.com/crashPopeye/storm/codec/json"
 	bolt "go.etcd.io/bbolt"
 	"github.com/stretchr/testify/require"
 )

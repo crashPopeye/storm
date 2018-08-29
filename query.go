@@ -1,8 +1,8 @@
 package storm
 
 import (
-	"github.com/asdine/storm/internal"
-	"github.com/asdine/storm/q"
+	"github.com/crashPopeye/storm/internal"
+	"github.com/crashPopeye/storm/q"
 	bolt "go.etcd.io/bbolt"
 )
 
